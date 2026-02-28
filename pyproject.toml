@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "capjs-server"
+version = "0.1.0"
+description = "Python server-side implementation of the Cap.js proof-of-work CAPTCHA protocol"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+keywords = ["captcha", "proof-of-work", "capjs", "spam", "bot-protection"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Security",
+]
+
+[project.optional-dependencies]
+django = ["django>=4.2"]
+
+[project.urls]
+Homepage = "https://github.com/vshn/capjs-server"
+Documentation = "https://github.com/vshn/capjs-server#readme"
+Issues = "https://github.com/vshn/capjs-server/issues"
+Source = "https://github.com/vshn/capjs-server"
+
+[dependency-groups]
+dev = [
+    "nox[uv]>=2024.4",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.9",
+    "django>=5.1",
+    "pytest-django>=4.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/capjs_server"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=capjs_server --cov-report=term-missing"
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
