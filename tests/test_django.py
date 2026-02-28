@@ -1,7 +1,6 @@
 """Tests for Django integration (views and helpers)."""
-import json
 
-import pytest
+import json
 
 from capjs_server.django import get_cap_server, validate_cap_token
 from capjs_server.testing import solve

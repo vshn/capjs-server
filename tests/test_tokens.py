@@ -1,10 +1,11 @@
 """Tests for HMAC-signed stateless token helpers."""
+
 import time
 
 from capjs_server.tokens import (
     make_challenge_token,
-    verify_challenge_token,
     make_verification_token,
+    verify_challenge_token,
     verify_verification_token,
 )
 

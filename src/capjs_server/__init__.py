@@ -10,6 +10,7 @@ Usage::
     if cap.validate(verification_token):
         process_form()
 """
+
 import hashlib
 import logging
 import secrets
@@ -18,8 +19,8 @@ import time
 from .prng import prng
 from .tokens import (
     make_challenge_token,
-    verify_challenge_token,
     make_verification_token,
+    verify_challenge_token,
     verify_verification_token,
 )
 
@@ -42,7 +43,8 @@ class CapServer:
         challenge_size: Salt length in hex chars (default 32).
         challenge_difficulty: Target prefix length in hex chars (default 4).
         challenge_expiry_ms: Challenge expiry in milliseconds (default 600000 = 10 min).
-        token_expiry_ms: Verification token expiry in milliseconds (default 300000 = 5 min).
+        token_expiry_ms: Verification token expiry in milliseconds
+            (default 300000 = 5 min).
     """
 
     def __init__(

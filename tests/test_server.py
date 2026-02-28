@@ -1,4 +1,5 @@
 """Tests for CapServer — the main public API."""
+
 import hashlib
 import time
 from unittest.mock import patch

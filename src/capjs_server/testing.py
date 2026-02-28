@@ -10,6 +10,7 @@ without a browser widget::
     result = cap.redeem(challenge["token"], solutions)
     assert result["success"]
 """
+
 import hashlib
 
 from .prng import prng

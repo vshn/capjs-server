@@ -1,4 +1,5 @@
 """Tests for FNV-1a + xorshift32 PRNG (must match Cap.js JavaScript implementation)."""
+
 from capjs_server.prng import prng
 
 

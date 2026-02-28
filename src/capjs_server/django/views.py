@@ -1,4 +1,5 @@
 """Django views for Cap.js challenge and redeem endpoints."""
+
 import json
 
 from django.http import JsonResponse

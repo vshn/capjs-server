@@ -21,6 +21,7 @@ Quick start::
     if not validate_cap_token(request):
         return HttpResponseForbidden()
 """
+
 from functools import lru_cache
 
 from django.conf import settings

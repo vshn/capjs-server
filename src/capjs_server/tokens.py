@@ -1,4 +1,5 @@
 """HMAC-signed stateless token helpers for Cap.js challenges and verification."""
+
 import hashlib
 import hmac
 import secrets
