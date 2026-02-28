@@ -45,7 +45,8 @@ packages = ["src/capjs_server"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=capjs_server --cov-report=term-missing"
-pythonpath = ["src"]
+pythonpath = ["src", "."]
+DJANGO_SETTINGS_MODULE = "tests.django_settings"
 
 [tool.ruff]
 target-version = "py310"
