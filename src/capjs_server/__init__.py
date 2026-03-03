@@ -46,6 +46,9 @@ class CapServer:
         challenge_expiry_ms: Challenge expiry in milliseconds (default 600000 = 10 min).
         token_expiry_ms: Verification token expiry in milliseconds
             (default 300000 = 5 min).
+        nonce_store: Optional NonceStore for replay protection. Defaults to
+            MemoryNonceStore(). Pass a custom implementation (Redis, memcached)
+            for strict single-use enforcement across multiple server instances.
     """
 
     def __init__(
