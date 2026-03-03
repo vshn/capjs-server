@@ -1,6 +1,5 @@
 """Tests for NonceStore protocol and MemoryNonceStore."""
 
-import time
 from unittest.mock import patch
 
 from capjs_server.nonce_store import MemoryNonceStore
