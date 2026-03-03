@@ -41,6 +41,7 @@ def get_cap_server() -> CapServer:
         challenge_difficulty=getattr(settings, "CAP_CHALLENGE_DIFFICULTY", 4),
         challenge_expiry_ms=getattr(settings, "CAP_CHALLENGE_EXPIRY", 600_000),
         token_expiry_ms=getattr(settings, "CAP_TOKEN_EXPIRY", 300_000),
+        nonce_store=getattr(settings, "CAP_NONCE_STORE", None),
     )
 
 

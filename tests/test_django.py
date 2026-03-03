@@ -1,6 +1,7 @@
 """Tests for Django integration (views and helpers)."""
 
 import json
+from unittest.mock import patch
 
 from capjs_server.django import get_cap_server, validate_cap_token
 from capjs_server.testing import solve
@@ -69,3 +70,30 @@ class TestCapRedeemView:
     def test_get_not_allowed(self, client):
         resp = client.get("/cap/redeem")
         assert resp.status_code == 405
+
+
+class TestReplayProtectionDjango:
+    def test_redeem_replay_rejected(self, client):
+        resp = client.post("/cap/challenge")
+        data = resp.json()
+        solutions = solve(data["token"], data["challenge"])
+        body = json.dumps({"token": data["token"], "solutions": solutions})
+        first = client.post("/cap/redeem", data=body, content_type="application/json")
+        assert first.json()["success"] is True
+        second = client.post("/cap/redeem", data=body, content_type="application/json")
+        assert second.json()["success"] is False
+
+    def test_custom_nonce_store_setting(self):
+        from capjs_server.nonce_store import MemoryNonceStore
+
+        custom_store = MemoryNonceStore()
+        with patch("capjs_server.django.settings") as mock_settings:
+            mock_settings.SECRET_KEY = "test-key"
+            mock_settings.CAP_NONCE_STORE = custom_store
+            # Clear the LRU cache to pick up new settings
+            from capjs_server.django import get_cap_server
+
+            get_cap_server.cache_clear()
+            cap = get_cap_server()
+            assert cap._nonce_store is custom_store
+            get_cap_server.cache_clear()
