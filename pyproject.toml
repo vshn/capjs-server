@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "capjs-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python server-side implementation of the Cap.js proof-of-work CAPTCHA protocol"
 readme = "README.md"
 license = "Apache-2.0"
