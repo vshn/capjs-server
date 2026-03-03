@@ -87,6 +87,37 @@ class TestRedeem:
             result = cap.redeem(data["token"], [0, 0])
             assert result["success"] is False
 
+    def test_replay_rejected(self, cap):
+        data = cap.create_challenge()
+        solutions = _solve(data["token"], data["challenge"])
+        first = cap.redeem(data["token"], solutions)
+        assert first["success"] is True
+        second = cap.redeem(data["token"], solutions)
+        assert second["success"] is False
+
+    def test_custom_nonce_store(self):
+        class FakeStore:
+            def __init__(self):
+                self.calls = []
+
+            def mark_used(self, nonce, ttl_seconds):
+                self.calls.append((nonce, ttl_seconds))
+                return True
+
+        store = FakeStore()
+        cap = CapServer(
+            secret_key="test-secret",
+            challenge_count=2,
+            challenge_size=8,
+            challenge_difficulty=1,
+            nonce_store=store,
+        )
+        data = cap.create_challenge()
+        solutions = _solve(data["token"], data["challenge"])
+        cap.redeem(data["token"], solutions)
+        assert len(store.calls) == 1
+        assert store.calls[0][1] > 0  # ttl_seconds is positive
+
 
 class TestValidate:
     def test_valid_token_accepted(self, cap):

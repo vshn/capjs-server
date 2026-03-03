@@ -16,6 +16,7 @@ import logging
 import secrets
 import time
 
+from .nonce_store import MemoryNonceStore, NonceStore
 from .prng import prng
 from .tokens import (
     make_challenge_token,
@@ -24,7 +25,7 @@ from .tokens import (
     verify_verification_token,
 )
 
-__all__ = ["CapServer"]
+__all__ = ["CapServer", "MemoryNonceStore", "NonceStore"]
 __version__ = "0.1.0"
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ class CapServer:
         challenge_difficulty: int = 4,
         challenge_expiry_ms: int = 600_000,
         token_expiry_ms: int = 300_000,
+        nonce_store: NonceStore | None = None,
     ):
         self._secret = secret_key.encode()
         self._count = challenge_count
@@ -63,6 +65,7 @@ class CapServer:
         self._difficulty = challenge_difficulty
         self._challenge_expiry_ms = challenge_expiry_ms
         self._token_expiry_ms = token_expiry_ms
+        self._nonce_store = nonce_store or MemoryNonceStore()
 
     def create_challenge(self) -> dict:
         """Generate a new proof-of-work challenge.
@@ -83,6 +86,12 @@ class CapServer:
         """
         parsed = verify_challenge_token(self._secret, token)
         if parsed is None:
+            return {"success": False}
+
+        nonce = parsed["nonce"]
+        remaining_ms = parsed["expires"] - time.time() * 1000
+        ttl_seconds = max(remaining_ms / 1000, 0)
+        if not self._nonce_store.mark_used(nonce, ttl_seconds):
             return {"success": False}
 
         config = parsed["config"]
