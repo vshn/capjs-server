@@ -66,6 +66,7 @@ def contact(request):
 | `challenge_difficulty` | `4` | Target prefix length in hex chars |
 | `challenge_expiry_ms` | `600000` | Challenge token lifetime (10 min) |
 | `token_expiry_ms` | `300000` | Verification token lifetime (5 min) |
+| `nonce_store` | `MemoryNonceStore()` | Pluggable replay protection store |
 
 ## Testing
 
@@ -90,6 +91,34 @@ All state is encoded in HMAC-signed tokens — no server-side storage. This make
 2. **Solve**: The Cap.js widget finds nonces whose SHA-256 hash starts with a PRNG-derived prefix
 3. **Redeem**: Server verifies the HMAC, checks solutions, and issues a signed verification token
 4. **Validate**: Server verifies the verification token's HMAC and expiry
+
+## Replay Protection
+
+By default, each challenge can only be redeemed once per server process. This prevents attackers from replaying solved challenges to stockpile verification tokens.
+
+The built-in `MemoryNonceStore` tracks used nonces in-memory with automatic expiry. For multi-process deployments (e.g. Kubernetes with multiple replicas), a challenge can be redeemed at most once per replica.
+
+For strict single-use enforcement across replicas, provide a shared nonce store:
+
+```python
+from capjs_server import CapServer, NonceStore
+
+class RedisNonceStore:
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    def mark_used(self, nonce: str, ttl_seconds: float) -> bool:
+        # SET NX returns True only if the key was newly created
+        return self.redis.set(f"cap:nonce:{nonce}", 1, nx=True, ex=int(ttl_seconds) + 1)
+
+cap = CapServer(secret_key="...", nonce_store=RedisNonceStore(redis_client))
+```
+
+Django:
+```python
+# settings.py
+CAP_NONCE_STORE = RedisNonceStore(redis_client)
+```
 
 ## License
 
