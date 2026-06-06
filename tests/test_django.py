@@ -67,6 +67,15 @@ class TestCapRedeemView:
         resp = client.post("/cap/redeem", content_type="application/json")
         assert resp.status_code == 400
 
+    def test_non_utf8_body_returns_400(self, client):
+        resp = client.post(
+            "/cap/redeem",
+            data=b"\xc0\xc0invalid",
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert resp.json()["success"] is False
+
     def test_get_not_allowed(self, client):
         resp = client.get("/cap/redeem")
         assert resp.status_code == 405
