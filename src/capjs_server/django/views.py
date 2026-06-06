@@ -30,7 +30,7 @@ class CapRedeemView(View):
             body = json.loads(request.body)
             token = body["token"]
             solutions = body["solutions"]
-        except (json.JSONDecodeError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError):
             return JsonResponse(
                 {"success": False, "error": "invalid request"}, status=400
             )
