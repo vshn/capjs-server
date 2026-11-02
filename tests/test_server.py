@@ -37,6 +37,23 @@ def _solve(token, config):
     return solutions
 
 
+def _wrong(token, config):
+    """Solutions that fail every sub-challenge.
+
+    A fixed guess like 999999 solves a difficulty-1 sub-challenge one time in
+    16, so a test using it fails at random.
+    """
+    wrong = []
+    for i in range(1, config["c"] + 1):
+        salt = prng(token + str(i), config["s"])
+        target = prng(token + str(i) + "d", config["d"])
+        n = 0
+        while hashlib.sha256((salt + str(n)).encode()).hexdigest().startswith(target):
+            n += 1
+        wrong.append(n)
+    return wrong
+
+
 class TestCreateChallenge:
     def test_returns_required_fields(self, cap):
         data = cap.create_challenge()
@@ -64,7 +81,7 @@ class TestRedeem:
 
     def test_wrong_solutions_fail(self, cap):
         data = cap.create_challenge()
-        wrong = [999999] * data["challenge"]["c"]
+        wrong = _wrong(data["token"], data["challenge"])
         result = cap.redeem(data["token"], wrong)
         assert result["success"] is False
 
@@ -117,6 +134,58 @@ class TestRedeem:
         cap.redeem(data["token"], solutions)
         assert len(store.calls) == 1
         assert store.calls[0][1] > 0  # ttl_seconds is positive
+
+
+class TestRedeemWithoutProofOfWork:
+    """A failed redeem must not cost the server a store entry: challenges are
+    free to fetch, so otherwise each zero-work request grows the store."""
+
+    @pytest.fixture
+    def store(self):
+        return MemoryNonceStore()
+
+    @pytest.fixture
+    def cap(self, store):
+        return CapServer(
+            secret_key="test-secret",
+            challenge_count=2,
+            challenge_size=8,
+            challenge_difficulty=1,
+            nonce_store=store,
+        )
+
+    def test_wrong_solutions_leave_store_empty(self, cap, store):
+        for _ in range(20):
+            data = cap.create_challenge()
+            wrong = _wrong(data["token"], data["challenge"])
+            assert cap.redeem(data["token"], wrong)["success"] is False
+        assert store._used == {}
+
+    def test_wrong_solution_count_leaves_store_empty(self, cap, store):
+        data = cap.create_challenge()
+        assert cap.redeem(data["token"], [0])["success"] is False
+        assert store._used == {}
+
+    def test_challenge_expiring_during_verification_is_refused(self, cap, store):
+        """A zero-TTL record would vanish on the next store call, so two
+        concurrent redeems of one challenge could both succeed."""
+        data = cap.create_challenge()
+        solutions = _solve(data["token"], data["challenge"])
+        after_expiry = data["expires"] / 1000 + 1
+        # The token check still sees a live challenge; the clock read after
+        # the solutions are verified is past its expiry.
+        with patch("capjs_server.time") as server_time:
+            server_time.time.return_value = after_expiry
+            assert cap.redeem(data["token"], solutions)["success"] is False
+        assert store._used == {}
+
+    def test_correct_solutions_after_a_failed_attempt_succeed(self, cap):
+        data = cap.create_challenge()
+        wrong = _wrong(data["token"], data["challenge"])
+        assert cap.redeem(data["token"], wrong)["success"] is False
+        solutions = _solve(data["token"], data["challenge"])
+        assert cap.redeem(data["token"], solutions)["success"] is True
+        assert cap.redeem(data["token"], solutions)["success"] is False
 
 
 class TestValidate:

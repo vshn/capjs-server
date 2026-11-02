@@ -97,12 +97,6 @@ class CapServer:
         if parsed is None:
             return {"success": False}
 
-        nonce = parsed["nonce"]
-        remaining_ms = parsed["expires"] - time.time() * 1000
-        ttl_seconds = max(remaining_ms / 1000, 0)
-        if not self._nonce_store.mark_used(nonce, ttl_seconds):
-            return {"success": False}
-
         config = parsed["config"]
         count, size, difficulty = config["c"], config["s"], config["d"]
 
@@ -115,6 +109,19 @@ class CapServer:
             h = hashlib.sha256((salt + str(solutions[i - 1])).encode()).hexdigest()
             if not h.startswith(target):
                 return {"success": False}
+
+        # Only after the proof of work checks out: challenges are free to
+        # fetch, so recording failed attempts would let a client grow the
+        # store without doing any work. mark_used is atomic, so of two
+        # concurrent redeems of one solved challenge only one succeeds.
+        # The challenge may have expired while the solutions were checked. A
+        # zero-TTL record would vanish on the next store call and let a
+        # concurrent redeem of the same challenge succeed too.
+        remaining_ms = parsed["expires"] - time.time() * 1000
+        if remaining_ms <= 0:
+            return {"success": False}
+        if not self._nonce_store.mark_used(parsed["nonce"], remaining_ms / 1000):
+            return {"success": False}
 
         expires = time.time() * 1000 + self._token_expiry_ms
         vertoken = make_verification_token(self._secret, expires)
