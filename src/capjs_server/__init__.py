@@ -15,6 +15,8 @@ import hashlib
 import logging
 import secrets
 import time
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _metadata_version
 
 from .nonce_store import MemoryNonceStore, NonceStore
 from .prng import prng
@@ -27,7 +29,12 @@ from .tokens import (
 )
 
 __all__ = ["CapServer", "MemoryNonceStore", "NonceStore"]
-__version__ = "0.3.0"
+
+# pyproject.toml is the only place the version is written down.
+try:
+    __version__ = _metadata_version("capjs-server")
+except PackageNotFoundError:  # imported from a source tree, not installed
+    __version__ = "0+unknown"
 
 logger = logging.getLogger(__name__)
 

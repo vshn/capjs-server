@@ -25,5 +25,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
+      # PyPI takes the version from pyproject.toml, not from the tag, so a
+      # tag that disagrees would publish under a different number.
+      - name: Tag matches the pyproject.toml version
+        run: |
+          expected="v$(uv version --short)"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match pyproject.toml version $expected"
+            exit 1
+          fi
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
