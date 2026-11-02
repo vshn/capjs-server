@@ -37,6 +37,23 @@ def _solve(token, config):
     return solutions
 
 
+def _wrong(token, config):
+    """Solutions that fail every sub-challenge.
+
+    A fixed guess like 999999 solves a difficulty-1 sub-challenge one time in
+    16, so a test using it fails at random.
+    """
+    wrong = []
+    for i in range(1, config["c"] + 1):
+        salt = prng(token + str(i), config["s"])
+        target = prng(token + str(i) + "d", config["d"])
+        n = 0
+        while hashlib.sha256((salt + str(n)).encode()).hexdigest().startswith(target):
+            n += 1
+        wrong.append(n)
+    return wrong
+
+
 class TestCreateChallenge:
     def test_returns_required_fields(self, cap):
         data = cap.create_challenge()
@@ -64,7 +81,7 @@ class TestRedeem:
 
     def test_wrong_solutions_fail(self, cap):
         data = cap.create_challenge()
-        wrong = [999999] * data["challenge"]["c"]
+        wrong = _wrong(data["token"], data["challenge"])
         result = cap.redeem(data["token"], wrong)
         assert result["success"] is False
 
@@ -140,7 +157,8 @@ class TestRedeemWithoutProofOfWork:
     def test_wrong_solutions_leave_store_empty(self, cap, store):
         for _ in range(20):
             data = cap.create_challenge()
-            assert cap.redeem(data["token"], [999999, 999999])["success"] is False
+            wrong = _wrong(data["token"], data["challenge"])
+            assert cap.redeem(data["token"], wrong)["success"] is False
         assert store._used == {}
 
     def test_wrong_solution_count_leaves_store_empty(self, cap, store):
@@ -150,7 +168,8 @@ class TestRedeemWithoutProofOfWork:
 
     def test_correct_solutions_after_a_failed_attempt_succeed(self, cap):
         data = cap.create_challenge()
-        assert cap.redeem(data["token"], [999999, 999999])["success"] is False
+        wrong = _wrong(data["token"], data["challenge"])
+        assert cap.redeem(data["token"], wrong)["success"] is False
         solutions = _solve(data["token"], data["challenge"])
         assert cap.redeem(data["token"], solutions)["success"] is True
         assert cap.redeem(data["token"], solutions)["success"] is False
