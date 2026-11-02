@@ -108,9 +108,13 @@ class CapServer:
         # fetch, so recording failed attempts would let a client grow the
         # store without doing any work. mark_used is atomic, so of two
         # concurrent redeems of one solved challenge only one succeeds.
+        # The challenge may have expired while the solutions were checked. A
+        # zero-TTL record would vanish on the next store call and let a
+        # concurrent redeem of the same challenge succeed too.
         remaining_ms = parsed["expires"] - time.time() * 1000
-        ttl_seconds = max(remaining_ms / 1000, 0)
-        if not self._nonce_store.mark_used(parsed["nonce"], ttl_seconds):
+        if remaining_ms <= 0:
+            return {"success": False}
+        if not self._nonce_store.mark_used(parsed["nonce"], remaining_ms / 1000):
             return {"success": False}
 
         expires = time.time() * 1000 + self._token_expiry_ms

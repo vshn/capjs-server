@@ -166,6 +166,19 @@ class TestRedeemWithoutProofOfWork:
         assert cap.redeem(data["token"], [0])["success"] is False
         assert store._used == {}
 
+    def test_challenge_expiring_during_verification_is_refused(self, cap, store):
+        """A zero-TTL record would vanish on the next store call, so two
+        concurrent redeems of one challenge could both succeed."""
+        data = cap.create_challenge()
+        solutions = _solve(data["token"], data["challenge"])
+        after_expiry = data["expires"] / 1000 + 1
+        # The token check still sees a live challenge; the clock read after
+        # the solutions are verified is past its expiry.
+        with patch("capjs_server.time") as server_time:
+            server_time.time.return_value = after_expiry
+            assert cap.redeem(data["token"], solutions)["success"] is False
+        assert store._used == {}
+
     def test_correct_solutions_after_a_failed_attempt_succeed(self, cap):
         data = cap.create_challenge()
         wrong = _wrong(data["token"], data["challenge"])
