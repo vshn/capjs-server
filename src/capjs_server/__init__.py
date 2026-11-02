@@ -142,4 +142,5 @@ class CapServer:
         # The record must outlive the token. If the store dropped it first,
         # a replay between the two expiries would be accepted again.
         ttl_seconds = (expires - time.time() * 1000) / 1000 + _SPENT_TOKEN_GRACE_S
-        return self._nonce_store.mark_used(f"vt:{token}", ttl_seconds)
+        # bool(): a Redis SET NX answers None, not False, for a replay.
+        return bool(self._nonce_store.mark_used(f"vt:{token}", ttl_seconds))

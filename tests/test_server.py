@@ -208,6 +208,30 @@ class TestValidateSingleUse:
         # cleanup but before the token's expiry would pass.
         assert store.calls[0][1] >= 300
 
+    def test_store_returning_none_on_replay_gives_false(self):
+        """redis-py's SET NX returns None, not False, when the key exists."""
+
+        class RedisLikeStore:
+            def __init__(self):
+                self.keys = set()
+
+            def mark_used(self, nonce, ttl_seconds):
+                if nonce in self.keys:
+                    return None
+                self.keys.add(nonce)
+                return True
+
+        cap = CapServer(
+            secret_key="test-secret",
+            challenge_count=2,
+            challenge_size=8,
+            challenge_difficulty=1,
+            nonce_store=RedisLikeStore(),
+        )
+        token = _verification_token(cap)
+        assert cap.validate(token) is True
+        assert cap.validate(token) is False
+
     def test_invalid_token_does_not_touch_store(self):
         store = _RecordingStore()
         cap = CapServer(secret_key="test-secret", nonce_store=store)

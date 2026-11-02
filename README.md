@@ -125,7 +125,7 @@ class RedisNonceStore:
 
     def mark_used(self, nonce: str, ttl_seconds: float) -> bool:
         # SET NX returns True only if the key was newly created
-        return self.redis.set(f"cap:nonce:{nonce}", 1, nx=True, ex=int(ttl_seconds) + 1)
+        return bool(self.redis.set(f"cap:nonce:{nonce}", 1, nx=True, ex=int(ttl_seconds) + 1))
 
 cap = CapServer(secret_key="...", nonce_store=RedisNonceStore(redis_client))
 ```
