@@ -37,6 +37,28 @@ class TestValidateCapToken:
         assert validate_cap_token(request) is False
 
 
+class TestValidateCapTokenSingleUse:
+    """The reproduction from issue 31: two validations of one token."""
+
+    def _request(self, rf):
+        cap = get_cap_server()
+        data = cap.create_challenge()
+        solutions = solve(data["token"], data["challenge"])
+        result = cap.redeem(data["token"], solutions)
+        return rf.post("/", {"cap-token": result["token"]})
+
+    def test_second_validation_rejected(self, rf):
+        request = self._request(rf)
+        assert validate_cap_token(request) is True
+        assert validate_cap_token(request) is False
+
+    def test_check_without_consuming_then_spend(self, rf):
+        request = self._request(rf)
+        assert validate_cap_token(request, consume=False) is True
+        assert validate_cap_token(request) is True
+        assert validate_cap_token(request) is False
+
+
 class TestCapChallengeView:
     def test_post_returns_challenge(self, client):
         resp = client.post("/cap/challenge")

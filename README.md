@@ -85,18 +85,34 @@ assert result["success"]
 
 ## How It Works
 
-All state is encoded in HMAC-signed tokens — no server-side storage. This makes it safe for multi-instance deployments (Kubernetes, Cloud Run, serverless).
+Challenges and verification tokens are HMAC-signed, so any instance can verify any token (Kubernetes, Cloud Run, serverless). The only server-side state is the nonce store that makes each one single use (see Replay Protection).
 
 1. **Challenge**: Server generates a random nonce and signs it with difficulty parameters into a token
 2. **Solve**: The Cap.js widget finds nonces whose SHA-256 hash starts with a PRNG-derived prefix
 3. **Redeem**: Server verifies the HMAC, checks solutions, and issues a signed verification token
-4. **Validate**: Server verifies the verification token's HMAC and expiry
+4. **Validate**: Server verifies the verification token's HMAC and expiry, then spends it
 
 ## Replay Protection
 
-By default, each challenge can only be redeemed once per server process. This prevents attackers from replaying solved challenges to stockpile verification tokens.
+By default, each challenge can only be redeemed once, and each verification token is accepted by `validate()` once. The first stops attackers from replaying solved challenges to stockpile verification tokens; the second stops one token from being resubmitted for its whole lifetime.
 
-The built-in `MemoryNonceStore` tracks used nonces in-memory with automatic expiry. For multi-process deployments (e.g. Kubernetes with multiple replicas), a challenge can be redeemed at most once per replica.
+The built-in `MemoryNonceStore` tracks both in memory with automatic expiry. For multi-process deployments (e.g. Kubernetes with multiple replicas), "once" means once per process.
+
+### Checking a token without spending it
+
+A form view often checks the CAPTCHA before it validates the form. If the token were spent there, a user who fixes a rejected form and resubmits would be refused, because the Cap.js widget keeps its token after a failed submit. Check first, spend once the submission is accepted:
+
+```python
+if not cap.validate(token, consume=False):  # signature and expiry only
+    return forbidden()
+if not form.is_valid():
+    return show_errors(form)                 # token still usable for the retry
+if not cap.validate(token):                  # spend it; False if already used
+    return forbidden()
+process_form()
+```
+
+`validate_cap_token(request, consume=False)` does the same in Django.
 
 For strict single-use enforcement across replicas, provide a shared nonce store:
 
@@ -109,7 +125,7 @@ class RedisNonceStore:
 
     def mark_used(self, nonce: str, ttl_seconds: float) -> bool:
         # SET NX returns True only if the key was newly created
-        return self.redis.set(f"cap:nonce:{nonce}", 1, nx=True, ex=int(ttl_seconds) + 1)
+        return bool(self.redis.set(f"cap:nonce:{nonce}", 1, nx=True, ex=int(ttl_seconds) + 1))
 
 cap = CapServer(secret_key="...", nonce_store=RedisNonceStore(redis_client))
 ```
