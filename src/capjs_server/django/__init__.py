@@ -45,10 +45,15 @@ def get_cap_server() -> CapServer:
     )
 
 
-def validate_cap_token(request, field_name: str = "cap-token") -> bool:
+def validate_cap_token(
+    request, field_name: str = "cap-token", *, consume: bool = True
+) -> bool:
     """Validate the Cap.js verification token from a Django request.
 
-    Reads the token from ``request.POST[field_name]`` and validates it.
+    Reads the token from ``request.POST[field_name]`` and validates it. The
+    token is spent, so a second call with the same token returns False.
+    Pass ``consume=False`` to check it without spending it; see
+    ``CapServer.validate``.
     """
     token = request.POST.get(field_name, "")
-    return get_cap_server().validate(token)
+    return get_cap_server().validate(token, consume=consume)

@@ -10,6 +10,7 @@ __all__ = [
     "verify_challenge_token",
     "make_verification_token",
     "verify_verification_token",
+    "verification_token_expiry",
 ]
 
 
@@ -62,21 +63,35 @@ def make_verification_token(secret: bytes, expires_ms: float) -> str:
     return f"{payload}:{_sign(secret, payload)}"
 
 
-def verify_verification_token(secret: bytes, token) -> bool:
-    """Verify a verification token's HMAC signature and expiry."""
+def verification_token_expiry(secret: bytes, token) -> float | None:
+    """Return a valid verification token's expiry in ms, or None.
+
+    None means the signature does not match, the token is malformed, or it
+    has expired.
+    """
     if not token or not isinstance(token, str):
-        return False
+        return None
     parts = token.rsplit(":", 1)
     if len(parts) != 2:
-        return False
+        return None
     payload, sig = parts
     if not hmac.compare_digest(sig, _sign(secret, payload)):
-        return False
+        return None
     fields = payload.split(":")
     if len(fields) != 2:
-        return False
+        return None
     try:
         expires = float(fields[1])
     except (ValueError, TypeError):
-        return False
-    return expires > time.time() * 1000
+        return None
+    if expires <= time.time() * 1000:
+        return None
+    return expires
+
+
+def verify_verification_token(secret: bytes, token) -> bool:
+    """Verify a verification token's HMAC signature and expiry.
+
+    Stateless: says nothing about whether the token was already used.
+    """
+    return verification_token_expiry(secret, token) is not None

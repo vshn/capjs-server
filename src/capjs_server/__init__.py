@@ -21,14 +21,18 @@ from .prng import prng
 from .tokens import (
     make_challenge_token,
     make_verification_token,
+    verification_token_expiry,
     verify_challenge_token,
     verify_verification_token,
 )
 
 __all__ = ["CapServer", "MemoryNonceStore", "NonceStore"]
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 logger = logging.getLogger(__name__)
+
+# How long a spent verification token stays recorded after it expires.
+_SPENT_TOKEN_GRACE_S = 60
 
 
 class CapServer:
@@ -46,9 +50,11 @@ class CapServer:
         challenge_expiry_ms: Challenge expiry in milliseconds (default 600000 = 10 min).
         token_expiry_ms: Verification token expiry in milliseconds
             (default 300000 = 5 min).
-        nonce_store: Optional NonceStore for replay protection. Defaults to
-            MemoryNonceStore(). Pass a custom implementation (Redis, memcached)
-            for strict single-use enforcement across multiple server instances.
+        nonce_store: Optional NonceStore for replay protection of both
+            challenges (``redeem``) and verification tokens (``validate``).
+            Defaults to MemoryNonceStore(). Pass a custom implementation
+            (Redis, memcached) for strict single-use enforcement across
+            multiple server instances.
     """
 
     def __init__(
@@ -114,6 +120,26 @@ class CapServer:
         vertoken = make_verification_token(self._secret, expires)
         return {"success": True, "token": vertoken, "expires": expires}
 
-    def validate(self, token) -> bool:
-        """Validate a verification token. Returns True if valid."""
-        return verify_verification_token(self._secret, token)
+    def validate(self, token, *, consume: bool = True) -> bool:
+        """Validate a verification token. Returns True if valid.
+
+        By default the token is spent: a second ``validate()`` of the same
+        token returns False, so one solved challenge buys one submission.
+        Single use holds per nonce store, so across processes only with a
+        shared store (see ``nonce_store``).
+
+        Pass ``consume=False`` to check the signature and expiry without
+        spending the token, e.g. before a form is validated, so that a user
+        correcting a rejected form can resubmit with the same token. That
+        check does not see whether the token was already spent: call
+        ``validate(token)`` again once the submission is accepted.
+        """
+        if not consume:
+            return verify_verification_token(self._secret, token)
+        expires = verification_token_expiry(self._secret, token)
+        if expires is None:
+            return False
+        # The record must outlive the token. If the store dropped it first,
+        # a replay between the two expiries would be accepted again.
+        ttl_seconds = (expires - time.time() * 1000) / 1000 + _SPENT_TOKEN_GRACE_S
+        return self._nonce_store.mark_used(f"vt:{token}", ttl_seconds)

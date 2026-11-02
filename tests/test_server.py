@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from capjs_server import CapServer
+from capjs_server import CapServer, MemoryNonceStore
 from capjs_server.prng import prng
 
 
@@ -144,3 +144,84 @@ class TestValidate:
         result = cap.redeem(data["token"], solutions)
         other = CapServer(secret_key="other-secret")
         assert other.validate(result["token"]) is False
+
+
+def _verification_token(cap):
+    data = cap.create_challenge()
+    solutions = _solve(data["token"], data["challenge"])
+    return cap.redeem(data["token"], solutions)["token"]
+
+
+class _RecordingStore:
+    def __init__(self):
+        self.calls = []
+
+    def mark_used(self, nonce, ttl_seconds):
+        self.calls.append((nonce, ttl_seconds))
+        return True
+
+
+class TestValidateSingleUse:
+    """A verification token buys one accepted submission (issue 31)."""
+
+    def test_second_validate_rejected(self, cap):
+        token = _verification_token(cap)
+        assert cap.validate(token) is True
+        assert cap.validate(token) is False
+
+    def test_check_without_consuming_leaves_token_usable(self, cap):
+        token = _verification_token(cap)
+        assert cap.validate(token, consume=False) is True
+        assert cap.validate(token, consume=False) is True
+        assert cap.validate(token) is True
+        assert cap.validate(token) is False
+
+    def test_shared_store_rejects_replay_on_another_instance(self):
+        store = MemoryNonceStore()
+        kwargs = dict(
+            secret_key="test-secret",
+            challenge_count=2,
+            challenge_size=8,
+            challenge_difficulty=1,
+            nonce_store=store,
+        )
+        first, second = CapServer(**kwargs), CapServer(**kwargs)
+        token = _verification_token(first)
+        assert first.validate(token) is True
+        assert second.validate(token) is False
+
+    def test_store_keeps_record_until_token_expires(self):
+        store = _RecordingStore()
+        cap = CapServer(
+            secret_key="test-secret",
+            challenge_count=2,
+            challenge_size=8,
+            challenge_difficulty=1,
+            token_expiry_ms=300_000,
+            nonce_store=store,
+        )
+        token = _verification_token(cap)
+        store.calls.clear()
+        assert cap.validate(token) is True
+        assert len(store.calls) == 1
+        # The record must outlive the token, or a replay after the record's
+        # cleanup but before the token's expiry would pass.
+        assert store.calls[0][1] >= 300
+
+    def test_invalid_token_does_not_touch_store(self):
+        store = _RecordingStore()
+        cap = CapServer(secret_key="test-secret", nonce_store=store)
+        assert cap.validate("bad:token:garbage") is False
+        assert cap.validate("") is False
+        assert cap.validate(None) is False
+        assert store.calls == []
+
+    def test_expired_token_rejected(self, cap):
+        with (
+            patch("capjs_server.tokens.time") as token_time,
+            patch("capjs_server.time") as server_time,
+        ):
+            token_time.time.return_value = server_time.time.return_value = 1.0
+            token = _verification_token(cap)
+            token_time.time.return_value = server_time.time.return_value = 2000.0
+            assert cap.validate(token) is False
