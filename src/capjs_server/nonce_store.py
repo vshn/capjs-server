@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import threading
 import time
 from typing import Protocol, runtime_checkable
@@ -31,18 +32,24 @@ class MemoryNonceStore:
 
     def __init__(self) -> None:
         self._used: dict[str, float] = {}
+        # Min-heap of (expiry, nonce), so cleanup touches only expired
+        # entries instead of scanning the whole store under the lock.
+        self._expiries: list[tuple[float, str]] = []
         self._lock = threading.Lock()
 
     def mark_used(self, nonce: str, ttl_seconds: float) -> bool:
         now = time.time()
         with self._lock:
-            # Lazy cleanup of expired entries
-            expired = [k for k, exp in self._used.items() if exp <= now]
-            for k in expired:
-                del self._used[k]
+            while self._expiries and self._expiries[0][0] <= now:
+                exp, old = heapq.heappop(self._expiries)
+                # A nonce re-added after expiring has a newer heap entry.
+                if self._used.get(old) == exp:
+                    del self._used[old]
 
             if nonce in self._used:
                 return False
 
-            self._used[nonce] = now + ttl_seconds
+            exp = now + ttl_seconds
+            self._used[nonce] = exp
+            heapq.heappush(self._expiries, (exp, nonce))
             return True

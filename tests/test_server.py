@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from capjs_server import CapServer
+from capjs_server import CapServer, MemoryNonceStore
 from capjs_server.prng import prng
 
 
@@ -117,6 +117,43 @@ class TestRedeem:
         cap.redeem(data["token"], solutions)
         assert len(store.calls) == 1
         assert store.calls[0][1] > 0  # ttl_seconds is positive
+
+
+class TestRedeemWithoutProofOfWork:
+    """A failed redeem must not cost the server a store entry: challenges are
+    free to fetch, so otherwise each zero-work request grows the store."""
+
+    @pytest.fixture
+    def store(self):
+        return MemoryNonceStore()
+
+    @pytest.fixture
+    def cap(self, store):
+        return CapServer(
+            secret_key="test-secret",
+            challenge_count=2,
+            challenge_size=8,
+            challenge_difficulty=1,
+            nonce_store=store,
+        )
+
+    def test_wrong_solutions_leave_store_empty(self, cap, store):
+        for _ in range(20):
+            data = cap.create_challenge()
+            assert cap.redeem(data["token"], [999999, 999999])["success"] is False
+        assert store._used == {}
+
+    def test_wrong_solution_count_leaves_store_empty(self, cap, store):
+        data = cap.create_challenge()
+        assert cap.redeem(data["token"], [0])["success"] is False
+        assert store._used == {}
+
+    def test_correct_solutions_after_a_failed_attempt_succeed(self, cap):
+        data = cap.create_challenge()
+        assert cap.redeem(data["token"], [999999, 999999])["success"] is False
+        solutions = _solve(data["token"], data["challenge"])
+        assert cap.redeem(data["token"], solutions)["success"] is True
+        assert cap.redeem(data["token"], solutions)["success"] is False
 
 
 class TestValidate:
